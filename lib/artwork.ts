@@ -10,14 +10,17 @@ export type Artwork = {
   session: string | null;
   title: string | null;
   created_at: string;
+  deleted_at: string | null; // soft-delete timestamp; null = live
 };
 
 export type ArtworkFilters = {
   species?: string;
   session?: string;
+  deleted?: boolean; // false (default) = live only; true = soft-deleted only
 };
 
 // Fetch artworks, newest first, optionally filtered by species/session.
+// By default only live (not soft-deleted) artworks are returned.
 export async function fetchArtworks(filters: ArtworkFilters = {}): Promise<Artwork[]> {
   let query = supabase
     .from("submissions")
@@ -27,12 +30,36 @@ export async function fetchArtworks(filters: ArtworkFilters = {}): Promise<Artwo
     .like("image_url", "http%")
     .order("created_at", { ascending: false });
 
+  if (filters.deleted) {
+    query = query.not("deleted_at", "is", null);
+  } else {
+    query = query.is("deleted_at", null);
+  }
+
   if (filters.species) query = query.eq("species", filters.species);
   if (filters.session) query = query.eq("session", filters.session);
 
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Artwork[];
+}
+
+// Soft-delete: hide an artwork from the gallery but keep it (recoverable).
+export async function softDeleteArtwork(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("submissions")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// Restore a soft-deleted artwork back to the gallery.
+export async function restoreArtwork(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("submissions")
+    .update({ deleted_at: null })
+    .eq("id", id);
+  if (error) throw error;
 }
 
 export type NewArtwork = {

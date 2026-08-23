@@ -14,6 +14,7 @@ create table if not exists public.categories (
   active boolean not null default true,
   sort integer not null default 0,
   created_at timestamptz not null default now(),
+  deleted_at timestamptz,
   unique (type, value)
 );
 

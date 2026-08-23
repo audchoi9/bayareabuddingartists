@@ -16,7 +16,8 @@ create table if not exists public.submissions (
   species text,
   session text,
   title text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
 create index if not exists submissions_created_at_idx
@@ -36,6 +37,12 @@ drop policy if exists "public insert submissions" on public.submissions;
 create policy "public insert submissions"
   on public.submissions for insert
   with check (true);
+
+-- Needed for admin soft-delete / restore of artwork.
+drop policy if exists "public update submissions" on public.submissions;
+create policy "public update submissions"
+  on public.submissions for update
+  using (true) with check (true);
 
 -- ---------------------------------------------------------------------------
 -- STORAGE BUCKET

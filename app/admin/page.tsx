@@ -1,14 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Lock, Plus, Trash2, Eye, EyeOff, Loader2, LogOut } from "lucide-react";
+import Image from "next/image";
+import {
+  Lock,
+  Plus,
+  Trash2,
+  RotateCcw,
+  Eye,
+  EyeOff,
+  Loader2,
+  LogOut,
+} from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
   fetchCategories,
+  softDeleteCategory,
+  restoreCategory,
   slugify,
   type Category,
   type CategoryType,
 } from "@/lib/categories";
+import {
+  fetchArtworks,
+  softDeleteArtwork,
+  restoreArtwork,
+  type Artwork,
+} from "@/lib/artwork";
 
 const AUTH_KEY = "baba-admin-authed";
 
@@ -44,13 +62,14 @@ export default function AdminPage() {
       </div>
       <p className="mt-1 text-muted">
         Add the sessions and species you&apos;ve run. Only these show up in the
-        upload form and the gallery filters. Hide one to keep its past art but
-        stop new uploads to it.
+        upload form and the gallery filters. Deleting anything here is a safe
+        soft-delete — nothing is lost and photos are never touched.
       </p>
 
       <div className="mt-8 flex flex-col gap-10">
         <CategoryManager type="session" title="Sessions" placeholder="e.g. Session 1: Sea Otters" />
         <CategoryManager type="species" title="Species" placeholder="e.g. California Sea Otter" />
+        <ArtworkManager />
       </div>
     </div>
   );
@@ -131,6 +150,8 @@ function CategoryManager({
   placeholder: string;
 }) {
   const [items, setItems] = useState<Category[]>([]);
+  const [trash, setTrash] = useState<Category[]>([]);
+  const [showTrash, setShowTrash] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newLabel, setNewLabel] = useState("");
@@ -140,7 +161,12 @@ function CategoryManager({
     setLoading(true);
     setError(null);
     try {
-      setItems(await fetchCategories(type));
+      const [live, deleted] = await Promise.all([
+        fetchCategories(type),
+        fetchCategories(type, { deleted: true }),
+      ]);
+      setItems(live);
+      setTrash(deleted);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load.");
     } finally {
@@ -164,17 +190,23 @@ function CategoryManager({
     }
     setAdding(true);
     setError(null);
+    // If a soft-deleted item with the same value exists, restore it instead of
+    // inserting a duplicate (the (type, value) pair is unique in the DB).
+    const buried = trash.find((t) => t.value === value);
+    if (buried) {
+      await restoreCategory(buried.id);
+      setAdding(false);
+      setNewLabel("");
+      load();
+      return;
+    }
     const nextSort = items.length ? Math.max(...items.map((i) => i.sort)) + 1 : 0;
     const { error } = await supabase
       .from("categories")
       .insert({ type, value, label, active: true, sort: nextSort });
     setAdding(false);
     if (error) {
-      setError(
-        error.code === "23505"
-          ? `"${label}" already exists.`
-          : error.message,
-      );
+      setError(error.code === "23505" ? `"${label}" already exists.` : error.message);
       return;
     }
     setNewLabel("");
@@ -182,17 +214,23 @@ function CategoryManager({
   }
 
   async function toggle(item: Category) {
-    await supabase
-      .from("categories")
-      .update({ active: !item.active })
-      .eq("id", item.id);
+    await supabase.from("categories").update({ active: !item.active }).eq("id", item.id);
     load();
   }
 
   async function remove(item: Category) {
-    if (!confirm(`Delete "${item.label}"? Past art keeps its tag but this option disappears.`))
+    if (
+      !confirm(
+        `Delete "${item.label}"? It moves to the recycle list below and photos keep their tag — you can restore it anytime.`,
+      )
+    )
       return;
-    await supabase.from("categories").delete().eq("id", item.id);
+    await softDeleteCategory(item.id);
+    load();
+  }
+
+  async function restore(item: Category) {
+    await restoreCategory(item.id);
     load();
   }
 
@@ -256,7 +294,7 @@ function CategoryManager({
                 </button>
                 <button
                   onClick={() => remove(item)}
-                  title="Delete"
+                  title="Delete (recoverable)"
                   className="grid h-9 w-9 place-items-center rounded-lg text-muted transition hover:bg-secondary/15 hover:text-dark"
                 >
                   <Trash2 size={18} />
@@ -266,6 +304,172 @@ function CategoryManager({
           ))
         )}
       </div>
+
+      {trash.length > 0 && (
+        <div className="mt-3">
+          <button
+            onClick={() => setShowTrash((s) => !s)}
+            className="text-sm font-semibold text-muted underline-offset-2 hover:underline"
+          >
+            {showTrash ? "Hide" : "Show"} deleted ({trash.length})
+          </button>
+          {showTrash && (
+            <div className="mt-2 flex flex-col gap-2">
+              {trash.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 rounded-xl bg-black/[0.03] px-4 py-3 ring-1 ring-black/5"
+                >
+                  <div className="opacity-60">
+                    <p className="font-semibold text-dark line-through">{item.label}</p>
+                    <p className="text-xs text-muted">{item.value} · deleted</p>
+                  </div>
+                  <button
+                    onClick={() => restore(item)}
+                    className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20"
+                  >
+                    <RotateCcw size={16} />
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </section>
+  );
+}
+
+function ArtworkManager() {
+  const [items, setItems] = useState<Artwork[]>([]);
+  const [trash, setTrash] = useState<Artwork[]>([]);
+  const [showTrash, setShowTrash] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const [live, deleted] = await Promise.all([
+        fetchArtworks(),
+        fetchArtworks({ deleted: true }),
+      ]);
+      setItems(live);
+      setTrash(deleted);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function remove(a: Artwork) {
+    if (
+      !confirm(
+        `Remove "${a.title || a.display_name}" from the gallery? It moves to the recycle list below — you can restore it anytime.`,
+      )
+    )
+      return;
+    await softDeleteArtwork(a.id);
+    load();
+  }
+
+  async function restore(a: Artwork) {
+    await restoreArtwork(a.id);
+    load();
+  }
+
+  return (
+    <section>
+      <h2 className="text-lg font-extrabold text-dark">Artwork</h2>
+      <p className="mt-1 text-sm text-muted">
+        Remove anything you don&apos;t want shown. Deletes are recoverable.
+      </p>
+
+      {error && (
+        <p className="mt-3 rounded-xl bg-secondary/15 px-4 py-3 text-sm font-semibold text-dark">
+          {error}
+        </p>
+      )}
+
+      <div className="mt-4">
+        {loading ? (
+          <div className="flex items-center gap-2 py-6 text-muted">
+            <Loader2 size={18} className="animate-spin" /> Loading…
+          </div>
+        ) : items.length === 0 ? (
+          <p className="rounded-xl bg-surface p-4 text-sm text-muted ring-1 ring-black/5">
+            No artwork in the gallery yet.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            {items.map((a) => (
+              <ArtThumb key={a.id} artwork={a} action="delete" onAction={() => remove(a)} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {trash.length > 0 && (
+        <div className="mt-4">
+          <button
+            onClick={() => setShowTrash((s) => !s)}
+            className="text-sm font-semibold text-muted underline-offset-2 hover:underline"
+          >
+            {showTrash ? "Hide" : "Show"} deleted artwork ({trash.length})
+          </button>
+          {showTrash && (
+            <div className="mt-2 grid grid-cols-3 gap-3 sm:grid-cols-4">
+              {trash.map((a) => (
+                <ArtThumb key={a.id} artwork={a} action="restore" onAction={() => restore(a)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ArtThumb({
+  artwork,
+  action,
+  onAction,
+}: {
+  artwork: Artwork;
+  action: "delete" | "restore";
+  onAction: () => void;
+}) {
+  const deleted = action === "restore";
+  return (
+    <div className="group relative overflow-hidden rounded-xl bg-black/5 ring-1 ring-black/5">
+      <div className={`relative aspect-square ${deleted ? "opacity-50" : ""}`}>
+        <Image
+          src={artwork.image_url}
+          alt={artwork.title || artwork.display_name}
+          fill
+          sizes="(max-width: 640px) 33vw, 25vw"
+          className="object-cover"
+        />
+      </div>
+      <button
+        onClick={onAction}
+        title={deleted ? "Restore to gallery" : "Remove from gallery (recoverable)"}
+        className={`absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-full text-white shadow transition ${
+          deleted ? "bg-primary/90 hover:bg-primary" : "bg-black/55 hover:bg-black/80"
+        }`}
+      >
+        {deleted ? <RotateCcw size={16} /> : <Trash2 size={16} />}
+      </button>
+      <p className="truncate px-2 py-1 text-[11px] font-semibold text-dark">
+        {artwork.display_name}
+      </p>
+    </div>
   );
 }

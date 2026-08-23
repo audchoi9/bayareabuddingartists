@@ -13,6 +13,7 @@ export type Category = {
   active: boolean;
   sort: number;
   created_at?: string;
+  deleted_at?: string | null; // soft-delete timestamp; null = live
 };
 
 // --- label cache -----------------------------------------------------------
@@ -51,10 +52,11 @@ export function labelForSession(value: string): string {
 // --- data access -----------------------------------------------------------
 
 // Fetch categories of a type. Pass { activeOnly: true } for public-facing
-// lists (upload form, browse filters); admin fetches everything.
+// lists (upload form, browse filters); admin fetches everything live.
+// Pass { deleted: true } to fetch the soft-deleted (trash) list instead.
 export async function fetchCategories(
   type: CategoryType,
-  opts: { activeOnly?: boolean } = {},
+  opts: { activeOnly?: boolean; deleted?: boolean } = {},
 ): Promise<Category[]> {
   let query = supabase
     .from("categories")
@@ -63,6 +65,12 @@ export async function fetchCategories(
     .order("sort", { ascending: true })
     .order("label", { ascending: true });
 
+  if (opts.deleted) {
+    query = query.not("deleted_at", "is", null);
+  } else {
+    query = query.is("deleted_at", null);
+  }
+
   if (opts.activeOnly) query = query.eq("active", true);
 
   const { data, error } = await query;
@@ -70,6 +78,25 @@ export async function fetchCategories(
   const cats = (data ?? []) as Category[];
   cacheCategoryLabels(cats);
   return cats;
+}
+
+// Soft-delete: remove a session/species from lists but keep it (recoverable).
+// Never touches uploaded photos — submissions store the value string separately.
+export async function softDeleteCategory(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("categories")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// Restore a soft-deleted session/species.
+export async function restoreCategory(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("categories")
+    .update({ deleted_at: null })
+    .eq("id", id);
+  if (error) throw error;
 }
 
 // Turn a human label ("California Sea Otter") into a stable value slug
