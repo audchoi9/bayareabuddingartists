@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { QRCodeCanvas } from "qrcode.react";
 import {
   Lock,
   Plus,
@@ -11,6 +12,12 @@ import {
   EyeOff,
   Loader2,
   LogOut,
+  SlidersHorizontal,
+  Images,
+  QrCode,
+  Download,
+  Copy,
+  Check,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -45,6 +52,20 @@ export default function AdminPage() {
     return <PasswordGate onSuccess={() => setAuthed(true)} />;
   }
 
+  return <AdminDashboard onLogout={() => setAuthed(false)} />;
+}
+
+type TabId = "categories" | "artwork" | "qr";
+
+const TABS: { id: TabId; label: string; icon: typeof Images }[] = [
+  { id: "categories", label: "Sessions & Species", icon: SlidersHorizontal },
+  { id: "artwork", label: "Artwork", icon: Images },
+  { id: "qr", label: "QR Code", icon: QrCode },
+];
+
+function AdminDashboard({ onLogout }: { onLogout: () => void }) {
+  const [tab, setTab] = useState<TabId>("categories");
+
   return (
     <div className="mx-auto max-w-2xl">
       <div className="flex items-center justify-between">
@@ -52,7 +73,7 @@ export default function AdminPage() {
         <button
           onClick={() => {
             sessionStorage.removeItem(AUTH_KEY);
-            setAuthed(false);
+            onLogout();
           }}
           className="flex items-center gap-1.5 rounded-full bg-black/5 px-3 py-2 text-sm font-semibold text-dark transition hover:bg-black/10"
         >
@@ -60,16 +81,39 @@ export default function AdminPage() {
           Log out
         </button>
       </div>
-      <p className="mt-1 text-muted">
-        Add the sessions and species you&apos;ve run. Only these show up in the
-        upload form and the gallery filters. Deleting anything here is a safe
-        soft-delete — nothing is lost and photos are never touched.
-      </p>
 
-      <div className="mt-8 flex flex-col gap-10">
-        <CategoryManager type="session" title="Sessions" placeholder="e.g. Session 1: Sea Otters" />
-        <CategoryManager type="species" title="Species" placeholder="e.g. California Sea Otter" />
-        <ArtworkManager />
+      <div className="mt-5 flex gap-1 rounded-full bg-black/5 p-1">
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={[
+              "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-bold transition",
+              tab === id
+                ? "bg-surface text-primary shadow-sm"
+                : "text-muted hover:text-dark",
+            ].join(" ")}
+          >
+            <Icon size={16} />
+            <span className="hidden sm:inline">{label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-6">
+        {tab === "categories" && (
+          <div className="flex flex-col gap-10">
+            <p className="text-sm text-muted">
+              Add the sessions and species you&apos;ve run. Only these show up in
+              the upload form and gallery filters. Deleting is a safe soft-delete
+              — nothing is lost and photos are never touched.
+            </p>
+            <CategoryManager type="session" title="Sessions" placeholder="e.g. Session 1: Sea Otters" />
+            <CategoryManager type="species" title="Species" placeholder="e.g. California Sea Otter" />
+          </div>
+        )}
+        {tab === "artwork" && <ArtworkManager />}
+        {tab === "qr" && <QRPanel />}
       </div>
     </div>
   );
@@ -470,6 +514,114 @@ function ArtThumb({
       <p className="truncate px-2 py-1 text-[11px] font-semibold text-dark">
         {artwork.display_name}
       </p>
+    </div>
+  );
+}
+
+function QRPanel() {
+  const [origin, setOrigin] = useState("");
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  const isLocal = origin.includes("localhost") || origin.includes("127.0.0.1");
+
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="text-sm text-muted">
+        Print or share these codes so kids and families can jump straight to a
+        page by scanning with their phone camera.
+      </p>
+
+      {isLocal && (
+        <p className="rounded-xl bg-secondary/15 px-4 py-3 text-sm font-semibold text-dark">
+          Heads up: you&apos;re on <span className="font-mono">{origin}</span>, so
+          these codes only work on this computer. Open your live site (the Vercel
+          URL) and use this tab there to get codes anyone can scan.
+        </p>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <QRCard
+          title="Add art"
+          help="For kids & families to upload their artwork"
+          url={origin ? `${origin}/upload` : ""}
+        />
+        <QRCard
+          title="Gallery"
+          help="To view everyone's art"
+          url={origin ? `${origin}/gallery` : ""}
+        />
+      </div>
+    </div>
+  );
+}
+
+function QRCard({ title, help, url }: { title: string; help: string; url: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  function download() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = `${title.toLowerCase().replace(/\s+/g, "-")}-qr.png`;
+    a.click();
+  }
+
+  async function copy() {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-2xl bg-surface p-5 text-center ring-1 ring-black/5">
+      <h3 className="text-lg font-extrabold text-dark">{title}</h3>
+      <p className="text-sm text-muted">{help}</p>
+
+      <div className="rounded-xl bg-white p-3 ring-1 ring-black/5">
+        {url ? (
+          <QRCodeCanvas
+            ref={canvasRef}
+            value={url}
+            size={180}
+            marginSize={2}
+            fgColor="#263332"
+            bgColor="#ffffff"
+            level="M"
+          />
+        ) : (
+          <div className="grid h-[180px] w-[180px] place-items-center">
+            <Loader2 size={20} className="animate-spin text-muted" />
+          </div>
+        )}
+      </div>
+
+      <p className="w-full truncate font-mono text-xs text-muted" title={url}>
+        {url}
+      </p>
+
+      <div className="flex w-full gap-2">
+        <button
+          onClick={download}
+          disabled={!url}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2.5 text-sm font-bold text-white transition hover:brightness-105 disabled:opacity-60"
+        >
+          <Download size={16} />
+          Download
+        </button>
+        <button
+          onClick={copy}
+          disabled={!url}
+          className="flex items-center justify-center gap-1.5 rounded-xl bg-black/5 px-3 py-2.5 text-sm font-semibold text-dark transition hover:bg-black/10 disabled:opacity-60"
+        >
+          {copied ? <Check size={16} className="text-primary" /> : <Copy size={16} />}
+          {copied ? "Copied" : "Copy link"}
+        </button>
+      </div>
     </div>
   );
 }
