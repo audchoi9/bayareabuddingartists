@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Leaf, Images, Search, Upload } from "lucide-react";
+import { Leaf, Home, Images, Upload } from "lucide-react";
 
 const NAV = [
-  { href: "/", label: "Gallery", icon: Images },
-  { href: "/browse", label: "Browse", icon: Search },
+  { href: "/", label: "Home", icon: Home },
+  { href: "/gallery", label: "Gallery", icon: Images },
   { href: "/upload", label: "Add Art", icon: Upload },
 ];
 

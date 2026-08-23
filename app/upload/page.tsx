@@ -60,7 +60,7 @@ export default function UploadPage() {
         title: title.trim() || null,
       });
       setDone(true);
-      setTimeout(() => router.push("/"), 1200);
+      setTimeout(() => router.push("/gallery"), 1200);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
       setSubmitting(false);

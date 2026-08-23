@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { SPECIES, SESSIONS } from "@/lib/categories";
 import Gallery from "@/components/Gallery";
 
@@ -10,11 +12,20 @@ export default function BrowsePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-dark">Browse the gallery</h1>
-        <p className="mt-1 text-muted">
-          Narrow the art down by species or by workshop session.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold text-dark">Filter the gallery</h1>
+          <p className="mt-1 text-muted">
+            Narrow the art down by species or by workshop session.
+          </p>
+        </div>
+        <Link
+          href="/gallery"
+          className="flex items-center gap-2 rounded-full bg-surface px-4 py-2.5 text-sm font-bold text-primary ring-1 ring-primary/20 transition hover:bg-primary/5"
+        >
+          <ArrowLeft size={18} />
+          Back to full gallery
+        </Link>
       </div>
 
       <div className="flex flex-col gap-4 rounded-2xl bg-surface p-4 ring-1 ring-black/5 sm:flex-row sm:items-end">
