@@ -71,19 +71,40 @@ export type NewArtwork = {
   title: string | null;
 };
 
+// iPhones save photos as HEIC, which browsers (and Next's image optimizer)
+// can't display. Convert those to JPEG in the browser before uploading so
+// every stored image is web-friendly. Other formats pass through untouched.
+async function toWebSafeImage(file: File): Promise<File> {
+  const isHeic =
+    /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
+  if (!isHeic) return file;
+
+  const heic2any = (await import("heic2any")).default as (opts: {
+    blob: Blob;
+    toType?: string;
+    quality?: number;
+  }) => Promise<Blob | Blob[]>;
+
+  const result = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+  const blob = Array.isArray(result) ? result[0] : result;
+  const name = file.name.replace(/\.(heic|heif)$/i, "") + ".jpg";
+  return new File([blob], name, { type: "image/jpeg" });
+}
+
 // Uploads the image to Storage, then inserts a row in `submissions`.
 export async function createArtwork(input: NewArtwork): Promise<Artwork> {
-  const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const file = await toWebSafeImage(input.file);
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
   // Unique-ish path without needing an auth session.
   const rand = Math.random().toString(36).slice(2, 10);
   const path = `${Date.now()}-${rand}.${ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from(ARTWORK_BUCKET)
-    .upload(path, input.file, {
+    .upload(path, file, {
       cacheControl: "3600",
       upsert: false,
-      contentType: input.file.type || undefined,
+      contentType: file.type || undefined,
     });
   if (uploadError) throw uploadError;
 
