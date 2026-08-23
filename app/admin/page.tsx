@@ -18,6 +18,8 @@ import {
   Download,
   Copy,
   Check,
+  X,
+  Maximize2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -520,6 +522,7 @@ function ArtThumb({
 
 function QRPanel() {
   const [origin, setOrigin] = useState("");
+  const [expanded, setExpanded] = useState<{ title: string; url: string } | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -531,7 +534,8 @@ function QRPanel() {
     <div className="flex flex-col gap-5">
       <p className="text-sm text-muted">
         Print or share these codes so kids and families can jump straight to a
-        page by scanning with their phone camera.
+        page by scanning with their phone camera. Click a code to blow it up
+        full-screen for projecting.
       </p>
 
       {isLocal && (
@@ -547,18 +551,38 @@ function QRPanel() {
           title="Add art"
           help="For kids & families to upload their artwork"
           url={origin ? `${origin}/upload` : ""}
+          onExpand={setExpanded}
         />
         <QRCard
           title="Gallery"
           help="To view everyone's art"
           url={origin ? `${origin}/gallery` : ""}
+          onExpand={setExpanded}
         />
       </div>
+
+      {expanded && (
+        <QRFullscreen
+          title={expanded.title}
+          url={expanded.url}
+          onClose={() => setExpanded(null)}
+        />
+      )}
     </div>
   );
 }
 
-function QRCard({ title, help, url }: { title: string; help: string; url: string }) {
+function QRCard({
+  title,
+  help,
+  url,
+  onExpand,
+}: {
+  title: string;
+  help: string;
+  url: string;
+  onExpand: (v: { title: string; url: string }) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -582,23 +606,34 @@ function QRCard({ title, help, url }: { title: string; help: string; url: string
       <h3 className="text-lg font-extrabold text-dark">{title}</h3>
       <p className="text-sm text-muted">{help}</p>
 
-      <div className="rounded-xl bg-white p-3 ring-1 ring-black/5">
+      <button
+        type="button"
+        onClick={() => url && onExpand({ title, url })}
+        disabled={!url}
+        title="Click to enlarge"
+        className="group relative rounded-xl bg-white p-3 ring-1 ring-black/5 transition hover:ring-primary/40 disabled:cursor-default"
+      >
         {url ? (
-          <QRCodeCanvas
-            ref={canvasRef}
-            value={url}
-            size={180}
-            marginSize={2}
-            fgColor="#263332"
-            bgColor="#ffffff"
-            level="M"
-          />
+          <>
+            <QRCodeCanvas
+              ref={canvasRef}
+              value={url}
+              size={180}
+              marginSize={2}
+              fgColor="#263332"
+              bgColor="#ffffff"
+              level="M"
+            />
+            <span className="pointer-events-none absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-dark/70 text-white opacity-0 transition group-hover:opacity-100">
+              <Maximize2 size={14} />
+            </span>
+          </>
         ) : (
           <div className="grid h-[180px] w-[180px] place-items-center">
             <Loader2 size={20} className="animate-spin text-muted" />
           </div>
         )}
-      </div>
+      </button>
 
       <p className="w-full truncate font-mono text-xs text-muted" title={url}>
         {url}
@@ -622,6 +657,65 @@ function QRCard({ title, help, url }: { title: string; help: string; url: string
           {copied ? "Copied" : "Copy link"}
         </button>
       </div>
+    </div>
+  );
+}
+
+function QRFullscreen({
+  title,
+  url,
+  onClose,
+}: {
+  title: string;
+  url: string;
+  onClose: () => void;
+}) {
+  // Size the QR to the viewport so it's crisp when projected.
+  const [size, setSize] = useState(320);
+
+  useEffect(() => {
+    const calc = () =>
+      setSize(Math.round(Math.min(window.innerWidth, window.innerHeight) * 0.72));
+    calc();
+    window.addEventListener("resize", calc);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", calc);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-white p-6"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-black/5 text-dark transition hover:bg-black/10"
+      >
+        <X size={24} />
+      </button>
+
+      <h2 className="text-3xl font-extrabold text-dark sm:text-4xl">{title}</h2>
+
+      <div onClick={(e) => e.stopPropagation()} className="rounded-2xl bg-white p-4">
+        <QRCodeCanvas
+          value={url}
+          size={size}
+          marginSize={2}
+          fgColor="#263332"
+          bgColor="#ffffff"
+          level="M"
+        />
+      </div>
+
+      <p className="font-mono text-sm text-muted sm:text-base">{url}</p>
+      <p className="text-sm text-muted">Tap anywhere or press Esc to close</p>
     </div>
   );
 }
