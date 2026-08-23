@@ -1,47 +1,83 @@
-// Shared category options used by the upload form and the browse filters.
-// These are Bay Area–native species grouped by the workshop sessions.
-// Edit these lists as your program's sessions evolve.
+import { supabase } from "./supabaseClient";
+
+// Sessions and species are now stored in the `categories` table and managed
+// from /admin. See supabase/admin.sql.
+
+export type CategoryType = "session" | "species";
 
 export type Category = {
-  label: string;
+  id: string;
+  type: CategoryType;
   value: string;
+  label: string;
+  active: boolean;
+  sort: number;
+  created_at?: string;
 };
 
-// Workshop sessions. `value` is what we store in the database.
-export const SESSIONS: Category[] = [
-  { label: "Session 1", value: "session-1" },
-  { label: "Session 2", value: "session-2" },
-  { label: "Session 3", value: "session-3" },
-  { label: "Session 4", value: "session-4" },
-  { label: "Session 5", value: "session-5" },
-  { label: "Session 6", value: "session-6" },
-];
+// --- label cache -----------------------------------------------------------
+// Lets display components (ArtCard, Lightbox) turn a stored value like
+// "sea-otter" into its label "California Sea Otter" synchronously. Populated
+// as a side effect whenever categories are fetched.
+const labelCache: Record<string, string> = {};
 
-// Native Bay Area species the kids draw. Grouped loosely by kind.
-export const SPECIES: Category[] = [
-  // Animals
-  { label: "California Sea Otter", value: "sea-otter" },
-  { label: "California Quail", value: "california-quail" },
-  { label: "Western Monarch Butterfly", value: "monarch-butterfly" },
-  { label: "California Newt", value: "california-newt" },
-  { label: "Coyote", value: "coyote" },
-  { label: "Harbor Seal", value: "harbor-seal" },
-  { label: "Anna's Hummingbird", value: "annas-hummingbird" },
-  { label: "Banana Slug", value: "banana-slug" },
-  { label: "Western Pond Turtle", value: "western-pond-turtle" },
-  { label: "Brown Pelican", value: "brown-pelican" },
-  // Plants
-  { label: "California Poppy", value: "california-poppy" },
-  { label: "Coast Redwood", value: "coast-redwood" },
-  { label: "Coast Live Oak", value: "coast-live-oak" },
-  { label: "Sticky Monkey-Flower", value: "monkey-flower" },
-  { label: "Giant Kelp", value: "giant-kelp" },
-];
+export function cacheCategoryLabels(
+  cats: Pick<Category, "type" | "value" | "label">[],
+) {
+  for (const c of cats) labelCache[`${c.type}:${c.value}`] = c.label;
+}
+
+// Fallback when a label isn't in the cache (e.g. category was deleted).
+export function prettify(value: string): string {
+  return value
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function labelFor(type: CategoryType, value: string): string {
+  return labelCache[`${type}:${value}`] ?? prettify(value);
+}
 
 export function labelForSpecies(value: string): string {
-  return SPECIES.find((s) => s.value === value)?.label ?? value;
+  return labelFor("species", value);
 }
 
 export function labelForSession(value: string): string {
-  return SESSIONS.find((s) => s.value === value)?.label ?? value;
+  return labelFor("session", value);
+}
+
+// --- data access -----------------------------------------------------------
+
+// Fetch categories of a type. Pass { activeOnly: true } for public-facing
+// lists (upload form, browse filters); admin fetches everything.
+export async function fetchCategories(
+  type: CategoryType,
+  opts: { activeOnly?: boolean } = {},
+): Promise<Category[]> {
+  let query = supabase
+    .from("categories")
+    .select("*")
+    .eq("type", type)
+    .order("sort", { ascending: true })
+    .order("label", { ascending: true });
+
+  if (opts.activeOnly) query = query.eq("active", true);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  const cats = (data ?? []) as Category[];
+  cacheCategoryLabels(cats);
+  return cats;
+}
+
+// Turn a human label ("California Sea Otter") into a stable value slug
+// ("california-sea-otter").
+export function slugify(label: string): string {
+  return label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }

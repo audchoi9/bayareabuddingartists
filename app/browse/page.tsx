@@ -1,14 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { SPECIES, SESSIONS } from "@/lib/categories";
+import { fetchCategories, type Category } from "@/lib/categories";
 import Gallery from "@/components/Gallery";
 
 export default function BrowsePage() {
   const [species, setSpecies] = useState<string>("");
   const [session, setSession] = useState<string>("");
+
+  const [speciesList, setSpeciesList] = useState<Category[]>([]);
+  const [sessionList, setSessionList] = useState<Category[]>([]);
+
+  useEffect(() => {
+    fetchCategories("species", { activeOnly: true }).then(setSpeciesList).catch(() => {});
+    fetchCategories("session", { activeOnly: true }).then(setSessionList).catch(() => {});
+  }, []);
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,7 +45,7 @@ export default function BrowsePage() {
             className="rounded-xl border border-black/10 bg-background px-3 py-2.5 text-dark outline-none focus:border-primary"
           >
             <option value="">All species</option>
-            {SPECIES.map((s) => (
+            {speciesList.map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
               </option>
@@ -53,7 +61,7 @@ export default function BrowsePage() {
             className="rounded-xl border border-black/10 bg-background px-3 py-2.5 text-dark outline-none focus:border-primary"
           >
             <option value="">All sessions</option>
-            {SESSIONS.map((s) => (
+            {sessionList.map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
               </option>

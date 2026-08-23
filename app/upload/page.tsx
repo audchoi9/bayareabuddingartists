@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Upload, Sparkles, RefreshCw, ImagePlus, CheckCircle2, Loader2 } from "lucide-react";
-import { SPECIES, SESSIONS } from "@/lib/categories";
+import { fetchCategories, type Category } from "@/lib/categories";
 import { generateNickname } from "@/lib/nicknames";
 import { createArtwork } from "@/lib/artwork";
 
@@ -22,6 +22,14 @@ export default function UploadPage() {
   const [title, setTitle] = useState("");
   const [species, setSpecies] = useState("");
   const [session, setSession] = useState("");
+
+  const [speciesList, setSpeciesList] = useState<Category[]>([]);
+  const [sessionList, setSessionList] = useState<Category[]>([]);
+
+  useEffect(() => {
+    fetchCategories("species", { activeOnly: true }).then(setSpeciesList).catch(() => {});
+    fetchCategories("session", { activeOnly: true }).then(setSessionList).catch(() => {});
+  }, []);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -184,10 +192,13 @@ export default function UploadPage() {
             <select
               value={species}
               onChange={(e) => setSpecies(e.target.value)}
-              className="rounded-xl border border-black/10 bg-surface px-3 py-2.5 text-dark outline-none focus:border-primary"
+              disabled={speciesList.length === 0}
+              className="rounded-xl border border-black/10 bg-surface px-3 py-2.5 text-dark outline-none focus:border-primary disabled:opacity-60"
             >
-              <option value="">Choose a species</option>
-              {SPECIES.map((s) => (
+              <option value="">
+                {speciesList.length ? "Choose a species" : "No species added yet"}
+              </option>
+              {speciesList.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}
                 </option>
@@ -202,10 +213,13 @@ export default function UploadPage() {
             <select
               value={session}
               onChange={(e) => setSession(e.target.value)}
-              className="rounded-xl border border-black/10 bg-surface px-3 py-2.5 text-dark outline-none focus:border-primary"
+              disabled={sessionList.length === 0}
+              className="rounded-xl border border-black/10 bg-surface px-3 py-2.5 text-dark outline-none focus:border-primary disabled:opacity-60"
             >
-              <option value="">Choose a session</option>
-              {SESSIONS.map((s) => (
+              <option value="">
+                {sessionList.length ? "Choose a session" : "No sessions added yet"}
+              </option>
+              {sessionList.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}
                 </option>

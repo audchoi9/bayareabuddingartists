@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ImageOff, Loader2 } from "lucide-react";
 import { fetchArtworks, type Artwork, type ArtworkFilters } from "@/lib/artwork";
+import { fetchCategories } from "@/lib/categories";
 import ArtCard from "./ArtCard";
 import Lightbox from "./Lightbox";
 
@@ -20,16 +21,23 @@ export default function Gallery({ filters }: { filters?: ArtworkFilters }) {
     let active = true;
     setLoading(true);
     setError(null);
-    fetchArtworks({ species, session })
-      .then((data) => {
+    (async () => {
+      // Best-effort: warm the label cache so cards show real labels.
+      // Never let a missing categories table break the gallery.
+      await Promise.allSettled([
+        fetchCategories("species"),
+        fetchCategories("session"),
+      ]);
+      try {
+        const data = await fetchArtworks({ species, session });
         if (active) setArtworks(data);
-      })
-      .catch((err) => {
-        if (active) setError(err.message ?? "Something went wrong.");
-      })
-      .finally(() => {
+      } catch (err) {
+        if (active)
+          setError(err instanceof Error ? err.message : "Something went wrong.");
+      } finally {
         if (active) setLoading(false);
-      });
+      }
+    })();
     return () => {
       active = false;
     };
