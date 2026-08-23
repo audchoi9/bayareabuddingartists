@@ -22,6 +22,9 @@ export async function fetchArtworks(filters: ArtworkFilters = {}): Promise<Artwo
   let query = supabase
     .from("submissions")
     .select("*")
+    // Only rows with a real http(s) image URL — guards next/image against
+    // malformed/legacy rows that would otherwise crash the gallery.
+    .like("image_url", "http%")
     .order("created_at", { ascending: false });
 
   if (filters.species) query = query.eq("species", filters.species);
