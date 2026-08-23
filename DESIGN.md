@@ -1,6 +1,6 @@
 # Bay Area Budding Artists — Design Document
 
-_Last updated: 2026-08-23_
+_Last updated: 2026-08-23 (rev 2)_
 
 ## 1. Overview
 
@@ -50,6 +50,7 @@ host. Biology lessons and drawing guides are planned for a later phase.
 - **Backend:** Supabase (Postgres + Storage), accessed from the browser with
   the public **anon** key
 - **HEIC conversion:** heic2any (browser-side, lazily loaded)
+- **QR codes:** qrcode.react
 - **Hosting:** Vercel
 - **Repo:** https://github.com/audchoi9/bayareabuddingartists
 
@@ -139,7 +140,7 @@ SQL lives in `supabase/`:
 | `/gallery` | Gallery | Grid of all live artwork (photos only) + a **Filter** button. |
 | `/browse` | Filter | Species/session dropdowns that narrow the gallery; link back to full gallery. |
 | `/upload` | Add Art | No-login upload form (photo, title, name/anonymous, species, session). |
-| `/admin` | Admin | Password-gated management of sessions, species, and artwork. |
+| `/admin` | Admin | Password-gated dashboard, organized into tabs (Sessions & Species, Artwork, QR Code). |
 | `/api/admin/login` | Server route | Verifies `ADMIN_PASSWORD` server-side. |
 
 ### Navigation
@@ -187,12 +188,24 @@ being stored, so every image is web-friendly.
 ### Admin (`/admin`)
 - **Password gate** checked by the `/api/admin/login` server route; on success
   a flag is stored in `sessionStorage` for the session.
-- **Sessions** and **Species** managers: add (auto-slugged value), **hide/show**
-  (`active` toggle — keeps past art, stops new uploads), and **delete**
-  (soft). A "Show deleted" list allows **restore**. Re-adding a soft-deleted
-  item restores it instead of erroring on the unique constraint.
-- **Artwork** manager: thumbnail grid with per-item **remove** (soft delete)
-  and a "Show deleted artwork" list to **restore**.
+- Organized into **three tabs**:
+  1. **Sessions & Species** — managers to add (auto-slugged value),
+     **hide/show** (`active` toggle — keeps past art, stops new uploads), and
+     **delete** (soft). A "Show deleted" list allows **restore**. Re-adding a
+     soft-deleted item restores it instead of erroring on the unique constraint.
+  2. **Artwork** — thumbnail grid with per-item **remove** (soft delete) and a
+     "Show deleted artwork" list to **restore**.
+  3. **QR Code** — see below.
+
+### QR codes (admin)
+- Generates scannable QR codes (via `qrcode.react`) for the **Add art**
+  (`/upload`) and **Gallery** (`/gallery`) pages, built from the current
+  `window.location.origin`.
+- Each code has **Download** (PNG, for printing/flyers) and **Copy link**.
+- **Click a code to expand it full-screen** — a large, viewport-sized, crisp
+  overlay meant for projecting at the workshop; closes on click, Esc, or the ✕.
+- Warns when viewed on `localhost`, since those links only work on that
+  computer — codes should be generated from the live site.
 
 ### Soft delete (everywhere)
 Deleting a session, species, or artwork sets `deleted_at` rather than removing
@@ -255,7 +268,43 @@ first-name/nickname only.
 
 ---
 
-## 11. Known issues & follow-ups
+## 11. Future features & roadmap
+
+Ideas we want to add over time, roughly grouped. Nothing here is built yet.
+
+### Learning content (the biggest planned addition)
+- **Video drawing lessons.** Short how-to-draw videos embedded in the site so
+  kids (and families at home) can watch step-by-step guides for drawing each
+  species — e.g. "How to draw a sea otter." These could live on a dedicated
+  Lessons page, or be attached to each species so a video shows up next to the
+  relevant artwork/filter.
+  - Open questions: where videos are hosted (YouTube/Vimeo embed vs. uploaded
+    to storage), whether they're tied to a species/session, and whether they're
+    admin-managed like categories.
+- **Biology lessons & drawing guides.** Text/image lessons on each species'
+  anatomy, ecosystem role, and impact on society — the educational half of the
+  workshop, brought into the app.
+- **"How to draw" tips / printable worksheets** to accompany the videos.
+
+### Gallery & experience
+- Richer per-child or per-artist views.
+- Reordering / featuring artwork; a "highlights" view.
+- Reactions or gentle, moderated comments.
+
+### Admin
+- Edit an existing session/species label (not just add/hide/delete).
+- Reorder sessions/species (the `sort` column already exists).
+- A moderation queue / bulk actions.
+- A Home-page QR and a printable poster layout (title + both codes).
+
+### Privacy & security
+- Restrict the gallery (e.g. an access code for families) instead of fully public.
+- Service-role hardening for admin writes (see §9).
+- Name policy for minors (first-name/nickname only).
+
+---
+
+## 12. Known issues & follow-ups
 
 - **Upload preview for HEIC**: the pre-upload preview may look broken for HEIC
   on non-Apple browsers (the stored/displayed image is fine). Converting the
@@ -263,12 +312,10 @@ first-name/nickname only.
 - **Legacy broken row**: one HEIC artwork uploaded before the fix remains
   broken; remove it via admin or the Supabase table editor.
 - **Admin security**: see §9 — service-role hardening is the main follow-up.
-- **Future features**: biology lessons & drawing guides, artwork
-  reordering/editing in admin, richer per-child views, moderation queue.
 
 ---
 
-## 12. Change history (high level)
+## 13. Change history (high level)
 
 1. Initial gallery app (upload, gallery, browse, lightbox) on Next.js + Supabase.
 2. Fixed Tailwind v4 theme (invisible-text bug) and contrast.
@@ -277,3 +324,5 @@ first-name/nickname only.
 5. Added password-gated `/admin` to manage sessions & species (DB-backed).
 6. Added soft-delete + recover for categories and artwork.
 7. Added iPhone HEIC → JPEG conversion on upload.
+8. Reorganized `/admin` into tabs and added a QR code panel.
+9. Added click-to-expand full-screen QR codes for projecting.
