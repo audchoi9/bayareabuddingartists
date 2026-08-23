@@ -1,23 +1,24 @@
 @import "tailwindcss";
 
-:root {
+/* Tailwind v4 reads theme tokens from @theme (NOT from tailwind.config.ts).
+   Defining color tokens here generates the matching color utilities. */
+@theme {
   /* Bay Area nature palette — warm, playful, kid-friendly */
-  --background: #FEF9F0; /* soft cream */
-  --surface: #FFFFFF;    /* cards */
-  --primary: #2E8B6F;    /* redwood-forest green */
-  --secondary: #F4A63C;  /* california-poppy orange */
-  --accent: #4C9BE8;     /* bay blue */
-  --muted: #7A8B84;      /* muted sage (secondary text) */
-  --dark: #263332;       /* near-black text */
+  --color-background: #fef9f0; /* soft cream */
+  --color-surface: #ffffff; /* cards */
+  --color-primary: #2e8b6f; /* redwood-forest green */
+  --color-secondary: #f4a63c; /* california-poppy orange */
+  --color-accent: #4c9be8; /* bay blue */
+  --color-muted: #5a6b63; /* darkened sage for readable secondary text */
+  --color-dark: #263332; /* near-black text */
 }
 
 body {
-  background: var(--background);
-  color: var(--dark);
+  background: var(--color-background);
+  color: var(--color-dark);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-/* Make the whole app feel friendly and rounded by default */
 * {
   scroll-behavior: smooth;
 }
