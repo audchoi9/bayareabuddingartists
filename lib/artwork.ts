@@ -1,0 +1,79 @@
+import { supabase, ARTWORK_BUCKET } from "./supabaseClient";
+
+// A single artwork submission as stored in the `submissions` table.
+export type Artwork = {
+  id: string;
+  image_url: string;
+  display_name: string; // either the kid's chosen name or an auto nickname
+  is_anonymous: boolean;
+  species: string | null;
+  session: string | null;
+  title: string | null;
+  created_at: string;
+};
+
+export type ArtworkFilters = {
+  species?: string;
+  session?: string;
+};
+
+// Fetch artworks, newest first, optionally filtered by species/session.
+export async function fetchArtworks(filters: ArtworkFilters = {}): Promise<Artwork[]> {
+  let query = supabase
+    .from("submissions")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (filters.species) query = query.eq("species", filters.species);
+  if (filters.session) query = query.eq("session", filters.session);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as Artwork[];
+}
+
+export type NewArtwork = {
+  file: File;
+  displayName: string;
+  isAnonymous: boolean;
+  species: string | null;
+  session: string | null;
+  title: string | null;
+};
+
+// Uploads the image to Storage, then inserts a row in `submissions`.
+export async function createArtwork(input: NewArtwork): Promise<Artwork> {
+  const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
+  // Unique-ish path without needing an auth session.
+  const rand = Math.random().toString(36).slice(2, 10);
+  const path = `${Date.now()}-${rand}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(ARTWORK_BUCKET)
+    .upload(path, input.file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: input.file.type || undefined,
+    });
+  if (uploadError) throw uploadError;
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(ARTWORK_BUCKET).getPublicUrl(path);
+
+  const { data, error: insertError } = await supabase
+    .from("submissions")
+    .insert({
+      image_url: publicUrl,
+      display_name: input.displayName,
+      is_anonymous: input.isAnonymous,
+      species: input.species,
+      session: input.session,
+      title: input.title,
+    })
+    .select()
+    .single();
+
+  if (insertError) throw insertError;
+  return data as Artwork;
+}

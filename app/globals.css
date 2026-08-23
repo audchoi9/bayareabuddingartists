@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+:root {
+  /* Bay Area nature palette — warm, playful, kid-friendly */
+  --background: #FEF9F0; /* soft cream */
+  --surface: #FFFFFF;    /* cards */
+  --primary: #2E8B6F;    /* redwood-forest green */
+  --secondary: #F4A63C;  /* california-poppy orange */
+  --accent: #4C9BE8;     /* bay blue */
+  --muted: #7A8B84;      /* muted sage (secondary text) */
+  --dark: #263332;       /* near-black text */
+}
+
+body {
+  background: var(--background);
+  color: var(--dark);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Make the whole app feel friendly and rounded by default */
+* {
+  scroll-behavior: smooth;
+}
